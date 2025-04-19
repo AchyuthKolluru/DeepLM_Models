@@ -1,7 +1,3 @@
-#!/bin/bash
-
-# source /path/to/your/env/bin/activate
-
 DATA_DIR=' '
 
 # Run the script

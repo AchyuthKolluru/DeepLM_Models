@@ -1,4 +1,4 @@
-DATA_DIR="path to video_dataset"
+DATA_DIR=""
 
 OUTPUT_DIR=""
 
