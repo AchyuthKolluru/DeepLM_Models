@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import argparse
 import io
 import time
@@ -16,12 +15,6 @@ from torchvision import transforms
 # ----------------------------
 class LmdbDataset(Dataset):
     def __init__(self, lmdb_path, img_size, transform=None):
-        """
-        Args:
-            lmdb_path (str): path to the .lmdb directory
-            img_size (int): for resizing / cropping
-            transform (callable): torchvision transforms to apply
-        """
         self.env = lmdb.open(
             lmdb_path,
             readonly=True,
@@ -43,7 +36,6 @@ class LmdbDataset(Dataset):
 
     def __getitem__(self, idx):
         with self.env.begin(write=False) as txn:
-            # format keys: zero-padded 8-digit index
             img_key = f"image-{idx:08d}".encode('ascii')
             lbl_key = f"label-{idx:08d}".encode('ascii')
 
@@ -54,23 +46,19 @@ class LmdbDataset(Dataset):
             if label_bytes is None:
                 raise KeyError(f"Label bytes for key {lbl_key} not found")
 
-        # load image
         img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
-
         if self.transform is not None:
             img = self.transform(img)
-
         label = int(label_bytes.decode('ascii'))
         return img, label
 
 # ----------------------------
-# HybridCNNTransformer
+# HybridCNNTransformer Model
 # ----------------------------
 class HybridCNNTransformer(nn.Module):
     def __init__(self, num_classes=100, img_size=224, token_dim=128,
                  num_transformer_layers=6, num_heads=8):
         super().__init__()
-        # CNN backbone
         self.cnn_backbone = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64), nn.ReLU(inplace=True),
@@ -81,7 +69,6 @@ class HybridCNNTransformer(nn.Module):
         self.feature_map_size = img_size // 8
         self.num_tokens = self.feature_map_size * self.feature_map_size
 
-        # Transformer tokens + position
         self.cls_token = nn.Parameter(torch.zeros(1, 1, token_dim))
         self.pos_embedding = nn.Parameter(torch.zeros(1, self.num_tokens + 1, token_dim))
 
@@ -105,15 +92,15 @@ class HybridCNNTransformer(nn.Module):
 
     def forward(self, x):
         b = x.size(0)
-        feat = self.cnn_backbone(x)                     # (b, token_dim, H, W)
-        feat = feat.flatten(2).transpose(1, 2)          # (b, num_tokens, token_dim)
-        cls = self.cls_token.expand(b, -1, -1)          # (b,1,token_dim)
-        tokens = torch.cat([cls, feat], dim=1)          # (b, num_tokens+1, token_dim)
-        tokens = tokens + self.pos_embedding            # add pos emb
-        tokens = tokens.transpose(0, 1)                 # (seq_len, b, token_dim)
-        encoded = self.transformer_encoder(tokens)      # same shape
-        cls_out = encoded[0]                            # (b, token_dim)
-        return self.classifier(cls_out)                 # (b, num_classes)
+        feat = self.cnn_backbone(x)
+        feat = feat.flatten(2).transpose(1, 2)
+        cls = self.cls_token.expand(b, -1, -1)
+        tokens = torch.cat([cls, feat], dim=1)
+        tokens = tokens + self.pos_embedding
+        tokens = tokens.transpose(0, 1)
+        encoded = self.transformer_encoder(tokens)
+        cls_out = encoded[0]
+        return self.classifier(cls_out)
 
 # ----------------------------
 # Argument Parsing
@@ -133,17 +120,16 @@ def parse_args():
     p.add_argument("--token_dim", type=int, default=128)
     p.add_argument("--num_transformer_layers", type=int, default=6)
     p.add_argument("--num_heads", type=int, default=8)
+    p.add_argument("--device", type=str, default="cuda",
+                   choices=["cuda", "cpu"],
+                   help="Device to run on: 'cuda' or 'cpu'.")
     return p.parse_args()
 
-# ----------------------------
-# Main Training Loop
-# ----------------------------
 def main():
     args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
     print(f"[INFO] Using device: {device}")
 
-    # transforms
     transform = transforms.Compose([
         transforms.Resize(args.img_size + 32),
         transforms.RandomResizedCrop(args.img_size),
@@ -155,14 +141,12 @@ def main():
         )
     ])
 
-    # dataset & loader
     dataset = LmdbDataset(args.lmdb_path, args.img_size, transform=transform)
     loader = DataLoader(
         dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.num_workers, pin_memory=True
+        num_workers=args.num_workers, pin_memory=(device.type == "cuda")
     )
 
-    # model
     model = HybridCNNTransformer(
         num_classes=args.num_classes,
         img_size=args.img_size,
@@ -170,16 +154,14 @@ def main():
         num_transformer_layers=args.num_transformer_layers,
         num_heads=args.num_heads
     )
-    if torch.cuda.device_count() > 1:
+    if device.type == "cuda" and torch.cuda.device_count() > 1:
         print(f"[INFO] {torch.cuda.device_count()} GPUs detected, using DataParallel.")
         model = nn.DataParallel(model)
     model.to(device)
 
-    # optimizer + loss
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss()
 
-    # train
     model.train()
     for epoch in range(1, args.epochs + 1):
         epoch_loss = 0.0
