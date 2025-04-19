@@ -1,0 +1,11 @@
+ID,Department,Buzzword,Context Phrase,Impact Rating,Utilization %,Budget Allocation ($),Is Strategic,Date Logged
+1,Marketing,Leverage,"We need to leverage our core competencies to enhance brand visibility.",High,87.5,150000,TRUE,2025-03-01
+2,Finance,Runway,"What's our financial runway before the next funding round?",Medium,62.1,320000,FALSE,2025-03-03
+3,Engineering,Scalability,"The microservice architecture enhances scalability and modular deployment.",High,94.2,500000,TRUE,2025-03-05
+4,HR,Upskilling,"We’re investing in upskilling our talent to future-proof our workforce.",Medium,73.0,120000,TRUE,2025-03-07
+5,Sales,Pain Point,"Identify the client’s pain points and tailor our pitch accordingly.",High,80.3,90000,FALSE,2025-03-08
+6,Product,Iteration,"This feature is still in iteration mode pending user feedback.",Low,58.7,110000,FALSE,2025-03-09
+7,IT,Synergy,"Achieving cross-departmental synergy is key to our digital transformation.",Medium,76.9,200000,TRUE,2025-03-10
+8,Design,User-Centric,"Let’s take a user-centric approach to the onboarding flow.",High,88.4,95000,TRUE,2025-03-11
+9,Operations,Touchpoint,"Every touchpoint should reflect our brand values.",Medium,65.1,100000,FALSE,2025-03-12
+10,Data Science,Actionable Insights,"We need to turn these metrics into actionable insights.",High,92.5,180000,TRUE,2025-03-13
