@@ -1,25 +1,38 @@
-LMDB_PATH=""
-DEVICE="cuda"
-EPOCHS=12
-BATCH_SIZE=128
-NUM_WORKERS=8
-LR=1e-4
-NUM_CLASSES=100
-IMG_SIZE=224
-TOKEN_DIM=128
-TRANSFORMER_LAYERS=6
-HEADS=8
+#!/usr/bin/env bash
 
-#Change File depending on Model needed to run
-python train_cnn.py \
-    --lmdb_path "$LMDB_PATH" \
+# Directory containing train.lmdb / val.lmdb
+DATA_DIR=/nfs-share/DL/pytorch_lmdb_imagenet/dataset/tiny-imagenet-lmdb
+
+WORKERS=4
+EPOCHS=90
+BATCH_SIZE=256
+LR=0.1
+
+echo "=== Training ComplexCNN ==="
+python complex_cnn.py \
+    $DATA_DIR \
+    --lmdb \
     --epochs $EPOCHS \
-    --batch_size $BATCH_SIZE \
-    --num_workers $NUM_WORKERS \
+    --batch-size $BATCH_SIZE \
+    --workers $WORKERS \
+    --lr $LR
+
+echo "=== Training ResNet50 ==="
+python resnet50_train.py \
+    $DATA_DIR \
+    --lmdb \
+    --epochs $EPOCHS \
+    --batch-size $BATCH_SIZE \
+    --workers $WORKERS \
     --lr $LR \
-    --num_classes $NUM_CLASSES \
-    --img_size $IMG_SIZE \
-    --token_dim $TOKEN_DIM \
-    --num_transformer_layers $TRANSFORMER_LAYERS \
-    --num_heads $HEADS \
-    --device $DEVICE
+    --pretrained
+
+echo "=== Training ViT (B-16) ==="
+python vit_train.py \
+    $DATA_DIR \
+    --lmdb \
+    --epochs $EPOCHS \
+    --batch-size $BATCH_SIZE \
+    --workers $WORKERS \
+    --lr $LR \
+    --pretrained
