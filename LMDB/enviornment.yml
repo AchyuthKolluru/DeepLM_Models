@@ -1,0 +1,17 @@
+name: tinyimagenet
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pytorch=1.13.1           
+  - torchvision=0.14.1       
+  - cudatoolkit=11.6         
+  - lmdb                     
+  - pillow                   
+  - numpy
+  - tqdm                     
+  - pip
+  - pip:
+    - progress               
