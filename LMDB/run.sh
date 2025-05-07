@@ -7,6 +7,7 @@ WORKERS=4
 EPOCHS=90
 BATCH_SIZE=128
 LR=0.1
+GPU=0
 
 echo "=== Training ComplexCNN ==="
 python complex_cnn.py \
@@ -15,7 +16,8 @@ python complex_cnn.py \
     --epochs $EPOCHS \
     --batch-size $BATCH_SIZE \
     --workers $WORKERS \
-    --lr $LR
+    --lr $LR    \
+    --gpu $GPU
 
 echo "=== Training ResNet50 ==="
 python resnet50_train.py \
@@ -26,6 +28,7 @@ python resnet50_train.py \
     --workers $WORKERS \
     --lr $LR \
     --pretrained
+    --gpu $GPU
 
 echo "=== Training ViT (B-16) ==="
 python vit_train.py \
@@ -35,4 +38,5 @@ python vit_train.py \
     --batch-size $BATCH_SIZE \
     --workers $WORKERS \
     --lr $LR \
-    --pretrained
+    --pretrained    \
+    --gpu $GPU
