@@ -18,6 +18,9 @@ import torchvision.models as models
 
 from folder2lmdb import ImageFolderLMDB
 
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+torch.cuda.empty_cache()
+
 best_acc1 = 0
 
 def main():

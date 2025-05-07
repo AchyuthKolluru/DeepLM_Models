@@ -5,7 +5,7 @@ DATA_DIR=/nfs-share/DL/pytorch_lmdb_imagenet/dataset/tiny-imagenet-lmdb
 
 WORKERS=4
 EPOCHS=90
-BATCH_SIZE=256
+BATCH_SIZE=128
 LR=0.1
 
 echo "=== Training ComplexCNN ==="
