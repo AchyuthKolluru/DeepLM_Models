@@ -47,6 +47,9 @@ def main():
     parser.add_argument('--lmdb', action='store_true')
     args = parser.parse_args()
 
+    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() and args.gpu is not None else "cpu")
+
+
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -56,17 +59,18 @@ def main():
     ngpus = torch.cuda.device_count()
     if args.multiprocessing_distributed:
         args.world_size = ngpus * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus, args=(ngpus, args))
+        mp.spawn(main_worker, nprocs=ngpus, args=(ngpus, args), device=(device))
     else:
-        main_worker(args.gpu, ngpus, args)
+        main_worker(args.gpu, ngpus, args, device)
 
-def main_worker(gpu, ngpus_per_node, args):
+def main_worker(gpu, ngpus_per_node, args, device):
     global best_acc1
     args.gpu = gpu
 
     print(f"=> creating model '{args.arch}'")
     model = models.resnet50(pretrained=args.pretrained)
     model.fc = nn.Linear(model.fc.in_features, 200)
+    model.to(device)
 
     if gpu is not None:
         torch.cuda.set_device(gpu)
@@ -74,7 +78,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model = torch.nn.DataParallel(model).cuda()
 
-    criterion = nn.CrossEntropyLoss().cuda(gpu)
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
