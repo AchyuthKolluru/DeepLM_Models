@@ -1,4 +1,3 @@
-# resnet50_train.py
 import argparse
 import os
 import random
@@ -18,7 +17,6 @@ import torchvision.transforms as transforms
 import torchvision.models as models
 
 from folder2lmdb import ImageFolderLMDB
-from progress.bar import Bar
 
 best_acc1 = 0
 
@@ -52,12 +50,12 @@ def main():
         cudnn.deterministic = True
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-    ngpus_per_node = torch.cuda.device_count()
+    ngpus = torch.cuda.device_count()
     if args.multiprocessing_distributed:
-        args.world_size = ngpus_per_node * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        args.world_size = ngpus * args.world_size
+        mp.spawn(main_worker, nprocs=ngpus, args=(ngpus, args))
     else:
-        main_worker(args.gpu, ngpus_per_node, args)
+        main_worker(args.gpu, ngpus, args)
 
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
@@ -65,65 +63,54 @@ def main_worker(gpu, ngpus_per_node, args):
 
     print(f"=> creating model '{args.arch}'")
     model = models.resnet50(pretrained=args.pretrained)
-    model.fc = nn.Linear(model.fc.in_features, 200)  # tiny-imagenet has 200 classes
+    model.fc = nn.Linear(model.fc.in_features, 200)
 
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
+    if gpu is not None:
+        torch.cuda.set_device(gpu)
+        model = model.cuda(gpu)
     else:
         model = torch.nn.DataParallel(model).cuda()
 
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+    criterion = nn.CrossEntropyLoss().cuda(gpu)
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
     if args.resume and os.path.isfile(args.resume):
-        loc = f'cuda:{args.gpu}' if args.gpu is not None else None
-        checkpoint = torch.load(args.resume, map_location=loc)
-        args.start_epoch = checkpoint['epoch']
-        best_acc1 = checkpoint['best_acc1']
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        loc = f'cuda:{gpu}' if gpu is not None else None
+        ckpt = torch.load(args.resume, map_location=loc)
+        args.start_epoch = ckpt['epoch']
+        best_acc1 = ckpt['best_acc1']
+        model.load_state_dict(ckpt['state_dict'])
+        optimizer.load_state_dict(ckpt['optimizer'])
         print(f"=> resumed from {args.resume} (epoch {args.start_epoch})")
 
     cudnn.benchmark = True
 
-    normalize = transforms.Normalize(mean=[0.485,0.456,0.406],
-                                     std=[0.229,0.224,0.225])
-    if args.lmdb:
-        traindir = os.path.join(args.data, 'train.lmdb')
-        valdir = os.path.join(args.data, 'val.lmdb')
-        train_dataset = ImageFolderLMDB(traindir, transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-        val_dataset = ImageFolderLMDB(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ]))
-    else:
+    normalize = transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
+    if not args.lmdb:
         raise RuntimeError("Only LMDB supported (use `--lmdb`)")
+    traindir = os.path.join(args.data, 'train.lmdb')
+    valdir   = os.path.join(args.data, 'val.lmdb')
+    train_dataset = ImageFolderLMDB(traindir, transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        normalize,
+    ]))
+    val_dataset = ImageFolderLMDB(valdir, transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ]))
 
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) \
-                    if args.distributed else None
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=(train_sampler is None),
-        num_workers=args.workers,
-        pin_memory=True,
-        sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.workers,
-        pin_memory=True)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None
+    train_loader  = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size,
+                      shuffle=(train_sampler is None), num_workers=args.workers,
+                      pin_memory=True, sampler=train_sampler)
+    val_loader    = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
+                      shuffle=False, num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
@@ -138,8 +125,7 @@ def main_worker(gpu, ngpus_per_node, args):
         acc1 = validate(val_loader, model, criterion, args)
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
-        if not args.multiprocessing_distributed or \
-           (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
+        if not args.multiprocessing_distributed or (args.rank % ngpus_per_node == 0):
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
@@ -147,8 +133,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'optimizer': optimizer.state_dict(),
             }, is_best)
 
-# (train, validate, save_checkpoint, adjust_learning_rate, accuracy same as in complex_cnn.py)
-# For brevity, copy those implementations verbatim here.
+# reuse train/validate/etc. from complex_cnn.py
 from complex_cnn import train, validate, save_checkpoint, adjust_learning_rate, accuracy
 
 if __name__ == '__main__':
